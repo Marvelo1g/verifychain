@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Issue Credential — VerifyChain</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080B12;--surface:#0F1320;--surface2:#141926;
+  --border:#1C2236;--border2:#242d45;
+  --accent:#00E8C0;--accent-dim:rgba(0,232,192,0.1);--accent-glow:rgba(0,232,192,0.2);
+  --text:#E8EDF5;--muted:#6B7A99;--muted2:#4A5570;--error:#FF5C5C;
+  --syne:'Syne',sans-serif;--inter:'Inter',sans-serif;--mono:'JetBrains Mono',monospace;
+}
+body{background:var(--bg);color:var(--text);font-family:var(--inter);min-height:100vh;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+body::before{content:'';position:fixed;inset:0;pointer-events:none;z-index:0;
+  background-image:linear-gradient(rgba(0,232,192,0.025) 1px,transparent 1px),linear-gradient(90deg,rgba(0,232,192,0.025) 1px,transparent 1px);
+  background-size:52px 52px}
+#bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:0.45}
+
+@keyframes fadeIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.fi{animation:fadeIn 0.6s ease both}
+.fi2{animation:fadeIn 0.6s 0.1s ease both}
+.fi3{animation:fadeIn 0.6s 0.2s ease both}
+
+nav{position:fixed;top:0;left:0;right:0;z-index:200;
+  display:flex;align-items:center;justify-content:space-between;
+  padding:0 2.5rem;height:64px;
+  background:rgba(8,11,18,0.9);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
+.logo{font-family:var(--syne);font-weight:800;font-size:1.1rem;color:var(--text);text-decoration:none}
+.logo em{color:var(--accent);font-style:normal}
+.nav-links{display:flex;gap:0.25rem}
+.nav-link{color:var(--muted);text-decoration:none;font-size:0.8rem;font-weight:500;
+  padding:0.4rem 0.875rem;border-radius:6px;transition:all 0.15s}
+.nav-link:hover{color:var(--text);background:var(--surface2)}
+.nav-link.active{color:var(--text);background:var(--surface2)}
+.nav-back{color:var(--muted);text-decoration:none;font-size:0.8rem;transition:color 0.15s}
+.nav-back:hover{color:var(--accent)}
+.hamburger{display:none;flex-direction:column;gap:5px;background:none;border:none;cursor:pointer;padding:4px}
+.hamburger span{display:block;width:22px;height:2px;background:var(--muted);border-radius:2px}
+.mobile-menu{display:none;position:fixed;top:64px;left:0;right:0;z-index:199;
+  background:rgba(8,11,18,0.97);backdrop-filter:blur(24px);
+  border-bottom:1px solid var(--border);padding:1rem 1.5rem;flex-direction:column;gap:0.25rem}
+.mobile-menu.open{display:flex}
+.mobile-menu a{color:var(--muted);text-decoration:none;font-size:0.9rem;padding:0.625rem 0.75rem;border-radius:6px;transition:all 0.15s}
+.mobile-menu a:hover{color:var(--text);background:var(--surface2)}
+
+/* ── MARQUEE ── */
+.marquee-wrap{position:relative;z-index:1;overflow:hidden;
+  background:rgba(0,232,192,0.04);border-bottom:1px solid rgba(0,232,192,0.12);
+  padding:0.5rem 0;margin-top:64px}
+.marquee-track{display:flex;width:max-content;animation:marquee 32s linear infinite}
+.marquee-item{display:flex;align-items:center;gap:0.4rem;padding:0 1.75rem;
+  font-family:var(--mono);font-size:0.65rem;letter-spacing:0.08em;
+  color:var(--muted);white-space:nowrap;text-transform:uppercase}
+.marquee-item .dot{width:4px;height:4px;border-radius:50%;background:var(--accent);flex-shrink:0}
+.marquee-item.hi{color:var(--accent)}
+@keyframes marquee{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+/* ── LAYOUT ── */
+.app{position:relative;z-index:1;display:grid;grid-template-columns:1fr 380px;min-height:calc(100vh - 94px)}
+@media(max-width:900px){.app{grid-template-columns:1fr}}
+
+/* LEFT */
+.panel-left{padding:2.5rem 3rem 3rem 3.5rem;border-right:1px solid var(--border)}
+@media(max-width:900px){.panel-left{padding:2rem 1.25rem;border-right:none}}
+.panel-eyebrow{font-family:var(--mono);font-size:0.65rem;letter-spacing:0.18em;
+  text-transform:uppercase;color:var(--accent);margin-bottom:0.625rem}
+.panel-title{font-family:var(--syne);font-size:1.9rem;font-weight:800;
+  letter-spacing:-0.03em;margin-bottom:0.4rem}
+.panel-sub{color:var(--muted);font-size:0.85rem;line-height:1.65;margin-bottom:2rem}
+
+/* WALLET BAR */
+.wallet-bar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;
+  background:var(--surface2);border:1px solid var(--border2);
+  border-radius:10px;padding:0.8rem 1.125rem;margin-bottom:2rem}
+.wb-left{display:flex;align-items:center;gap:0.5rem}
+.wb-dot{width:7px;height:7px;border-radius:50%;background:#FF5C5C;flex-shrink:0}
+.wb-dot.live{background:var(--accent);box-shadow:0 0 8px var(--accent);animation:blink 1.5s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0.4}}
+.wb-text{font-family:var(--mono);font-size:0.75rem;color:var(--muted)}
+.wb-text.live{color:var(--accent)}
+.btn-sm{background:var(--accent);color:#080B12;font-family:var(--inter);
+  font-size:0.75rem;font-weight:600;padding:0.4rem 0.875rem;
+  border-radius:6px;border:none;cursor:pointer;transition:all 0.15s;white-space:nowrap}
+.btn-sm:hover{background:#00ffce}
+.btn-sm.ok{background:var(--accent-dim);color:var(--accent);border:1px solid rgba(0,232,192,0.2)}
+
+/* FORM */
+.form{display:flex;flex-direction:column;gap:1.375rem}
+.fsec{display:flex;flex-direction:column;gap:0.875rem}
+.fsec-label{font-family:var(--mono);font-size:0.6rem;text-transform:uppercase;
+  letter-spacing:0.15em;color:var(--muted2);padding-bottom:0.5rem;border-bottom:1px solid var(--border)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:0.875rem}
+@media(max-width:520px){.frow{grid-template-columns:1fr}}
+.field{display:flex;flex-direction:column;gap:0.35rem}
+.field label{font-size:0.75rem;font-weight:500;color:var(--muted)}
+.field input,.field select{
+  background:var(--surface2);border:1px solid var(--border2);border-radius:8px;
+  padding:0.75rem 0.875rem;color:var(--text);font-family:var(--inter);font-size:0.875rem;
+  outline:none;transition:border-color 0.15s,box-shadow 0.15s;width:100%}
+.field input::placeholder{color:var(--muted2)}
+.field input:focus,.field select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,232,192,0.1)}
+.mono-input input{font-family:var(--mono);font-size:0.78rem}
+.field select option{background:#0D1020}
+
+.status{display:none;padding:0.875rem 1rem;border-radius:8px;font-size:0.82rem;line-height:1.6}
+.status.show{display:block}
+.status.loading{background:rgba(0,232,192,0.06);border:1px solid rgba(0,232,192,0.15);color:var(--accent)}
+.status.success{background:rgba(0,232,192,0.06);border:1px solid rgba(0,232,192,0.2);color:var(--accent)}
+.status.error{background:rgba(255,92,92,0.06);border:1px solid rgba(255,92,92,0.2);color:var(--error)}
+.tx{font-family:var(--mono);font-size:0.68rem;word-break:break-all;margin-top:0.4rem;opacity:0.7}
+
+.btn-issue{display:flex;align-items:center;justify-content:center;gap:0.5rem;
+  background:var(--accent);color:#080B12;font-family:var(--inter);
+  font-size:0.9rem;font-weight:700;padding:0.9rem;border-radius:9px;
+  border:none;cursor:pointer;transition:all 0.2s;box-shadow:0 4px 20px var(--accent-glow)}
+.btn-issue:hover{background:#00ffce;transform:translateY(-2px);box-shadow:0 8px 30px var(--accent-glow)}
+.btn-issue:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}
+.spin{display:inline-block;width:14px;height:14px;border:2px solid rgba(8,11,18,0.3);
+  border-top-color:#080B12;border-radius:50%;animation:spin 0.7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* RIGHT */
+.panel-right{padding:2.5rem 2.5rem 3rem 2rem;display:flex;flex-direction:column;gap:1.75rem}
+@media(max-width:900px){.panel-right{padding:0 1.25rem 3rem;border-top:1px solid var(--border)}}
+.preview-label{font-family:var(--mono);font-size:0.6rem;text-transform:uppercase;
+  letter-spacing:0.15em;color:var(--muted2);margin-bottom:0.75rem}
+.cred-card{background:linear-gradient(145deg,#0F1628,#0A0F1E);
+  border:1px solid var(--border2);border-radius:14px;padding:1.5rem;position:relative;overflow:hidden}
+.cred-card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;
+  background:linear-gradient(90deg,transparent 10%,var(--accent) 50%,transparent 90%);opacity:0.4}
+.cred-card::after{content:'';position:absolute;top:-40%;right:-20%;width:70%;height:130%;
+  background:radial-gradient(ellipse,rgba(0,232,192,0.06) 0%,transparent 70%);pointer-events:none}
+.cc-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.125rem}
+.cc-logo{font-family:var(--syne);font-weight:800;font-size:0.78rem}
+.cc-logo em{color:var(--accent);font-style:normal}
+.cc-soul{display:flex;align-items:center;gap:0.3rem;font-family:var(--mono);font-size:0.58rem;
+  color:var(--accent);background:var(--accent-dim);border:1px solid rgba(0,232,192,0.2);
+  padding:0.18rem 0.45rem;border-radius:4px}
+.cc-name{font-family:var(--syne);font-weight:700;font-size:1.1rem;margin-bottom:0.2rem}
+.cc-type{color:var(--accent);font-size:0.78rem;font-weight:500;margin-bottom:0.875rem}
+.cc-grid{display:grid;grid-template-columns:1fr 1fr;gap:0.625rem;margin-bottom:0.875rem}
+.cc-f label{font-family:var(--mono);font-size:0.55rem;text-transform:uppercase;
+  letter-spacing:0.1em;color:var(--muted2);display:block;margin-bottom:0.15rem}
+.cc-f span{font-size:0.78rem;font-weight:500}
+.cc-foot{display:flex;align-items:center;justify-content:space-between;
+  padding-top:0.75rem;border-top:1px solid var(--border)}
+.cc-addr{font-family:var(--mono);font-size:0.6rem;color:var(--muted2)}
+.cc-badge{font-family:var(--mono);font-size:0.55rem;color:var(--muted2);
+  background:var(--surface2);border:1px solid var(--border);padding:0.15rem 0.4rem;border-radius:3px}
+
+.info-box{background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:1.125rem}
+.info-title{font-size:0.75rem;font-weight:600;margin-bottom:0.5rem;display:flex;align-items:center;gap:0.4rem}
+.info-box ul{list-style:none;display:flex;flex-direction:column;gap:0.3rem}
+.info-box li{font-size:0.78rem;color:var(--muted);display:flex;gap:0.4rem;line-height:1.55}
+.info-box li::before{content:'·';color:var(--accent);flex-shrink:0}
+
+@media(max-width:768px){nav{padding:0 1.25rem}.nav-links{display:none}.hamburger{display:flex}}
+</style>
+</head>
+<body>
+<canvas id="bgCanvas"></canvas>
+
+<nav>
+  <a href="index.html" class="logo">Verify<em>Chain</em></a>
+  <div class="nav-links">
+    <a href="verify.html" class="nav-link">Verify</a>
+    <a href="issue.html" class="nav-link active">Issue</a>
+  </div>
+  <a href="index.html" class="nav-back">← Home</a>
+  <button class="hamburger" id="hamburger"><span></span><span></span><span></span></button>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="verify.html">🔍 Verify</a>
+  <a href="issue.html">🎓 Issue</a>
+  <a href="index.html">← Home</a>
+</div>
+
+<div class="marquee-wrap">
+  <div class="marquee-track" id="marqueeTrack"></div>
+</div>
+
+<div class="app">
+  <div class="panel-left">
+    <p class="panel-eyebrow fi">Institution Portal</p>
+    <h1 class="panel-title fi2">Issue a Credential</h1>
+    <p class="panel-sub fi3">Mint a permanent soulbound credential NFT directly to a recipient's wallet. Only the contract owner can issue.</p>
+
+    <div class="wallet-bar fi3">
+      <div class="wb-left">
+        <div class="wb-dot" id="wDot"></div>
+        <span class="wb-text" id="wText">No wallet connected</span>
+      </div>
+      <button class="btn-sm" id="wBtn">Connect Wallet</button>
+    </div>
+
+    <form class="form" onsubmit="return false">
+      <div class="fsec">
+        <span class="fsec-label">Recipient</span>
+        <div class="field mono-input">
+          <label>Wallet Address</label>
+          <input type="text" id="fAddr" placeholder="0x..."/>
+        </div>
+        <div class="frow">
+          <div class="field"><label>Full Name</label><input type="text" id="fName" placeholder="Alice Johnson"/></div>
+          <div class="field"><label>Institution</label><input type="text" id="fIssuer" placeholder="e.g. MIT"/></div>
+        </div>
+      </div>
+      <div class="fsec">
+        <span class="fsec-label">Credential</span>
+        <div class="field">
+          <label>Credential Type</label>
+          <select id="fType">
+            <option value="">Select type...</option>
+            <option>Bachelor of Science</option>
+            <option>Bachelor of Arts</option>
+            <option>Master of Science</option>
+            <option>Master of Arts</option>
+            <option>Doctor of Philosophy</option>
+            <option>Professional Certificate</option>
+            <option>Diploma</option>
+            <option>Course Completion</option>
+            <option>Professional Licence</option>
+          </select>
+        </div>
+      </div>
+      <div class="status" id="status"></div>
+      <button class="btn-issue" id="issueBtn" disabled>
+        <span>🎓</span> Issue Credential
+      </button>
+    </form>
+  </div>
+
+  <div class="panel-right">
+    <div>
+      <p class="preview-label">Live Preview</p>
+      <div class="cred-card">
+        <div class="cc-head">
+          <span class="cc-logo">Verify<em>Chain</em></span>
+          <span class="cc-soul"><span style="width:5px;height:5px;border-radius:50%;background:var(--accent);display:inline-block"></span>SOULBOUND</span>
+        </div>
+        <div class="cc-name" id="pName">Recipient Name</div>
+        <div class="cc-type" id="pType">Credential Type</div>
+        <div class="cc-grid">
+          <div class="cc-f"><label>Issued By</label><span id="pIssuer">Institution</span></div>
+          <div class="cc-f"><label>Date</label><span id="pDate">—</span></div>
+          <div class="cc-f"><label>Token ID</label><span style="font-family:var(--mono);font-size:0.72rem">#—</span></div>
+          <div class="cc-f"><label>Network</label><span>Hardhat Local</span></div>
+        </div>
+        <div class="cc-foot">
+          <span class="cc-addr" id="pAddr">0x0000...0000</span>
+          <span class="cc-badge">NON-TRANSFERABLE</span>
+        </div>
+      </div>
+    </div>
+    <div class="info-box">
+      <div class="info-title">🔒 About soulbound tokens</div>
+      <ul>
+        <li>Cannot be transferred once issued to a wallet</li>
+        <li>Permanently stored on Ethereum blockchain</li>
+        <li>Complies with EIP-5192 standard</li>
+        <li>Verifiable by anyone, at any time, for free</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── BACKGROUND ──
+const canvas=document.getElementById('bgCanvas');
+const ctx=canvas.getContext('2d');
+let W,H;
+function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
+resize();window.addEventListener('resize',resize);
+const COLS=['#00E8C0','#1E90FF','#7B5EA7'];
+let t=0;
+function animate(){
+  ctx.clearRect(0,0,W,H);t+=0.0004;
+  const g1=ctx.createRadialGradient(W*0.85+Math.sin(t)*60,H*0.15+Math.cos(t)*40,0,W*0.85,H*0.15,W*0.5);
+  g1.addColorStop(0,'rgba(0,232,192,0.1)');g1.addColorStop(1,'transparent');
+  ctx.fillStyle=g1;ctx.fillRect(0,0,W,H);
+  const g2=ctx.createRadialGradient(W*0.1+Math.cos(t*0.8)*50,H*0.8+Math.sin(t*0.8)*40,0,W*0.1,H*0.8,W*0.4);
+  g2.addColorStop(0,'rgba(123,94,167,0.1)');g2.addColorStop(1,'transparent');
+  ctx.fillStyle=g2;ctx.fillRect(0,0,W,H);
+  requestAnimationFrame(animate);
+}
+animate();
+
+// ── MARQUEE ──
+const items=['Institution Portal','Issue Credentials','ERC-721 Standard','Soulbound NFT','EIP-5192 Compliant','Tamper-Proof','On-Chain Verification','Permanent Record','Non-Transferable','Wallet-Bound'];
+const track=document.getElementById('marqueeTrack');
+[...items,...items].forEach((t,i)=>{
+  const el=document.createElement('span');
+  el.className='marquee-item'+(i%3===1?' hi':'');
+  el.innerHTML=`<span class="dot"></span>${t}`;
+  track.appendChild(el);
+});
+
+// ── HAMBURGER ──
+document.getElementById('hamburger').addEventListener('click',()=>document.getElementById('mobileMenu').classList.toggle('open'));
+
+// ── PREVIEW ──
+const fName=document.getElementById('fName'),fType=document.getElementById('fType');
+const fIssuer=document.getElementById('fIssuer'),fAddr=document.getElementById('fAddr');
+const pName=document.getElementById('pName'),pType=document.getElementById('pType');
+const pIssuer=document.getElementById('pIssuer'),pAddr=document.getElementById('pAddr'),pDate=document.getElementById('pDate');
+pDate.textContent=new Date().toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'});
+fName.addEventListener('input',()=>pName.textContent=fName.value||'Recipient Name');
+fType.addEventListener('change',()=>pType.textContent=fType.value||'Credential Type');
+fIssuer.addEventListener('input',()=>pIssuer.textContent=fIssuer.value||'Institution');
+fAddr.addEventListener('input',()=>{const v=fAddr.value.trim();pAddr.textContent=v.length>10?v.slice(0,6)+'...'+v.slice(-4):'0x0000...0000'});
+
+// ── WALLET ──
+let wc,pc,acct;
+const wDot=document.getElementById('wDot'),wText=document.getElementById('wText');
+const wBtn=document.getElementById('wBtn'),issueBtn=document.getElementById('issueBtn'),status=document.getElementById('status');
+wBtn.addEventListener('click',connectWallet);
+async function connectWallet(){
+  if(!window.ethereum){alert('Please install MetaMask.');return}
+  try{
+    const[addr]=await window.ethereum.request({method:'eth_requestAccounts'});
+    setConnected(addr);
+  }catch(e){console.error(e)}
+}
+function setConnected(addr){
+  acct=addr;wDot.classList.add('live');
+  wText.textContent=addr.slice(0,6)+'...'+addr.slice(-4);wText.classList.add('live');
+  wBtn.textContent='Connected';wBtn.classList.add('ok');issueBtn.disabled=false;
+}
+window.addEventListener('load',async()=>{
+  if(window.ethereum){const a=await window.ethereum.request({method:'eth_accounts'});if(a.length)setConnected(a[0])}
+});
+
+// ── ISSUE ──
+issueBtn.addEventListener('click',async()=>{
+  const to=fAddr.value.trim(),name=fName.value.trim(),type=fType.value,issuer=fIssuer.value.trim();
+  if(!to||!name||!type||!issuer){showS('error','Please fill in all fields.');return}
+  if(!to.startsWith('0x')||to.length!==42){showS('error','Invalid wallet address (must start with 0x, 42 chars).');return}
+  showS('loading','<span class="spin"></span> &nbsp;Sending transaction...');
+  issueBtn.disabled=true;
+  try{
+    const{createWalletClient,createPublicClient,custom,http,parseAbi}=await import('https://esm.sh/viem@2');
+    const{hardhat}=await import('https://esm.sh/viem@2/chains');
+    const CA='0x5FbDB2315678afecb367f032d93F642f64180aa3';
+    const ABI=parseAbi(['function issueCredential(address,string,string,string) external returns (uint256)']);
+    wc=createWalletClient({account:acct,chain:hardhat,transport:custom(window.ethereum)});
+    pc=createPublicClient({chain:hardhat,transport:http('http://127.0.0.1:8545')});
+    const hash=await wc.writeContract({address:CA,abi:ABI,functionName:'issueCredential',args:[to,name,type,issuer]});
+    showS('loading','<span class="spin"></span> &nbsp;Waiting for confirmation...<div class="tx">'+hash+'</div>');
+    await pc.waitForTransactionReceipt({hash});
+    showS('success','✓ Credential issued. Permanently bound to recipient wallet.<div class="tx">TX: '+hash+'</div>');
+  }catch(e){showS('error','Failed: '+(e.shortMessage||e.message))}
+  finally{issueBtn.disabled=false}
+});
+function showS(type,msg){status.className='status show '+type;status.innerHTML=msg}
+</script>
+</body>
+</html>
