@@ -10,6 +10,8 @@ contract VerifyChain is ERC721, Ownable {
 
     uint256 private _nextTokenId;
 
+    mapping(address => bool) public isIssuer;
+
     struct Credential {
         string  recipientName;
         string  credentialType;
@@ -26,18 +28,38 @@ contract VerifyChain is ERC721, Ownable {
         string  credentialType,
         string  issuingBody
     );
+    event IssuerAdded(address indexed issuer);
+    event IssuerRemoved(address indexed issuer);
+
+    modifier onlyIssuer() {
+        require(isIssuer[msg.sender], "VerifyChain: not an authorized issuer");
+        _;
+    }
 
     constructor(address initialOwner)
         ERC721("VerifyChain", "VCN")
         Ownable(initialOwner)
-    {}
+    {
+        isIssuer[initialOwner] = true;
+        emit IssuerAdded(initialOwner);
+    }
+
+    function addIssuer(address issuer) external onlyOwner {
+        isIssuer[issuer] = true;
+        emit IssuerAdded(issuer);
+    }
+
+    function removeIssuer(address issuer) external onlyOwner {
+        isIssuer[issuer] = false;
+        emit IssuerRemoved(issuer);
+    }
 
     function issueCredential(
         address to,
         string memory recipientName,
         string memory credentialType,
         string memory issuingBody
-    ) external onlyOwner returns (uint256) {
+    ) external onlyIssuer returns (uint256) {
         uint256 tokenId = _nextTokenId++;
 
         credentials[tokenId] = Credential({

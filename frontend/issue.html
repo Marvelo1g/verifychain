@@ -186,7 +186,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;
   <div class="panel-left">
     <p class="panel-eyebrow fi">Institution Portal</p>
     <h1 class="panel-title fi2">Issue a Credential</h1>
-    <p class="panel-sub fi3">Mint a permanent soulbound credential NFT directly to a recipient's wallet. Only the contract owner can issue.</p>
+    <p class="panel-sub fi3">Mint a permanent soulbound credential NFT directly to a recipient's wallet. Only authorized issuers can issue.</p>
 
     <div class="wallet-bar fi3">
       <div class="wb-left">
@@ -231,6 +231,19 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;
         <span>🎓</span> Issue Credential
       </button>
     </form>
+
+    <div class="fsec" id="issuerSection" style="display:none; margin-top:2rem;">
+      <span class="fsec-label">Manage Issuers (Owner Only)</span>
+      <div class="field mono-input">
+        <label>Wallet Address to Add/Remove</label>
+        <input type="text" id="fIssuerAddr" placeholder="0x..."/>
+      </div>
+      <div style="display:flex; gap:0.625rem;">
+        <button class="btn-sm" id="addIssuerBtn" style="flex:1;">+ Add Issuer</button>
+        <button class="btn-sm" id="removeIssuerBtn" style="flex:1; background:var(--surface2); color:var(--error); border:1px solid rgba(255,92,92,0.2);">− Remove Issuer</button>
+      </div>
+      <div class="status" id="issuerStatus"></div>
+    </div>
   </div>
 
   <div class="panel-right">
@@ -247,7 +260,7 @@ nav{position:fixed;top:0;left:0;right:0;z-index:200;
           <div class="cc-f"><label>Issued By</label><span id="pIssuer">Institution</span></div>
           <div class="cc-f"><label>Date</label><span id="pDate">—</span></div>
           <div class="cc-f"><label>Token ID</label><span style="font-family:var(--mono);font-size:0.72rem">#—</span></div>
-          <div class="cc-f"><label>Network</label><span>Hardhat Local</span></div>
+          <div class="cc-f"><label>Network</label><span>Sepolia Testnet</span></div>
         </div>
         <div class="cc-foot">
           <span class="cc-addr" id="pAddr">0x0000...0000</span>
@@ -328,10 +341,15 @@ function setConnected(addr){
   acct=addr;wDot.classList.add('live');
   wText.textContent=addr.slice(0,6)+'...'+addr.slice(-4);wText.classList.add('live');
   wBtn.textContent='Connected';wBtn.classList.add('ok');issueBtn.disabled=false;
+  checkOwner(addr);
 }
 window.addEventListener('load',async()=>{
   if(window.ethereum){const a=await window.ethereum.request({method:'eth_accounts'});if(a.length)setConnected(a[0])}
 });
+
+// ── CONTRACT CONFIG ──
+const CA='0x1a5b6e9A9eD01e3E174e3BBB4E2BE59876E929F6';
+const RPC='https://eth-sepolia.g.alchemy.com/v2/alch_I32LPxbekzNsjF-kwPONo';
 
 // ── ISSUE ──
 issueBtn.addEventListener('click',async()=>{
@@ -342,11 +360,10 @@ issueBtn.addEventListener('click',async()=>{
   issueBtn.disabled=true;
   try{
     const{createWalletClient,createPublicClient,custom,http,parseAbi}=await import('https://esm.sh/viem@2');
-    const{hardhat}=await import('https://esm.sh/viem@2/chains');
-    const CA='0x5FbDB2315678afecb367f032d93F642f64180aa3';
+    const{sepolia}=await import('https://esm.sh/viem@2/chains');
     const ABI=parseAbi(['function issueCredential(address,string,string,string) external returns (uint256)']);
-    wc=createWalletClient({account:acct,chain:hardhat,transport:custom(window.ethereum)});
-    pc=createPublicClient({chain:hardhat,transport:http('http://127.0.0.1:8545')});
+    wc=createWalletClient({account:acct,chain:sepolia,transport:custom(window.ethereum)});
+    pc=createPublicClient({chain:sepolia,transport:http(RPC)});
     const hash=await wc.writeContract({address:CA,abi:ABI,functionName:'issueCredential',args:[to,name,type,issuer]});
     showS('loading','<span class="spin"></span> &nbsp;Waiting for confirmation...<div class="tx">'+hash+'</div>');
     await pc.waitForTransactionReceipt({hash});
@@ -355,6 +372,65 @@ issueBtn.addEventListener('click',async()=>{
   finally{issueBtn.disabled=false}
 });
 function showS(type,msg){status.className='status show '+type;status.innerHTML=msg}
+
+// ── OWNER CHECK + ISSUER MANAGEMENT ──
+const issuerSection = document.getElementById('issuerSection');
+const fIssuerAddr = document.getElementById('fIssuerAddr');
+const addIssuerBtn = document.getElementById('addIssuerBtn');
+const removeIssuerBtn = document.getElementById('removeIssuerBtn');
+const issuerStatus = document.getElementById('issuerStatus');
+
+async function checkOwner(addr) {
+  try {
+    const{createPublicClient,http,parseAbi}=await import('https://esm.sh/viem@2');
+    const{sepolia}=await import('https://esm.sh/viem@2/chains');
+    const ABI=parseAbi(['function owner() external view returns (address)']);
+    const pubClient=createPublicClient({chain:sepolia,transport:http(RPC)});
+    const ownerAddr = await pubClient.readContract({address:CA,abi:ABI,functionName:'owner'});
+    if(ownerAddr.toLowerCase() === addr.toLowerCase()){
+      issuerSection.style.display = 'flex';
+      issuerSection.style.flexDirection = 'column';
+      issuerSection.style.gap = '0.875rem';
+    } else {
+      issuerSection.style.display = 'none';
+    }
+  } catch(e) { console.error('Owner check failed:', e); }
+}
+
+async function manageIssuer(action) {
+  const target = fIssuerAddr.value.trim();
+  if(!target || !target.startsWith('0x') || target.length !== 42){
+    showIssuerStatus('error', 'Enter a valid wallet address.');
+    return;
+  }
+  showIssuerStatus('loading', '<span class="spin"></span> &nbsp;Sending transaction...');
+  try {
+    const{createWalletClient,createPublicClient,custom,http,parseAbi}=await import('https://esm.sh/viem@2');
+    const{sepolia}=await import('https://esm.sh/viem@2/chains');
+    const ABI=parseAbi([
+      'function addIssuer(address) external',
+      'function removeIssuer(address) external'
+    ]);
+    const wallet=createWalletClient({account:acct,chain:sepolia,transport:custom(window.ethereum)});
+    const pubClient=createPublicClient({chain:sepolia,transport:http(RPC)});
+    const fn = action === 'add' ? 'addIssuer' : 'removeIssuer';
+    const hash = await wallet.writeContract({address:CA,abi:ABI,functionName:fn,args:[target]});
+    showIssuerStatus('loading', '<span class="spin"></span> &nbsp;Confirming...<div class="tx">'+hash+'</div>');
+    await pubClient.waitForTransactionReceipt({hash});
+    showIssuerStatus('success', `✓ Issuer ${action === 'add' ? 'added' : 'removed'} successfully.<div class="tx">TX: ${hash}</div>`);
+    fIssuerAddr.value = '';
+  } catch(e) {
+    showIssuerStatus('error', 'Failed: ' + (e.shortMessage || e.message));
+  }
+}
+
+function showIssuerStatus(type, msg) {
+  issuerStatus.className = 'status show ' + type;
+  issuerStatus.innerHTML = msg;
+}
+
+addIssuerBtn.addEventListener('click', () => manageIssuer('add'));
+removeIssuerBtn.addEventListener('click', () => manageIssuer('remove'));
 </script>
 </body>
 </html>
